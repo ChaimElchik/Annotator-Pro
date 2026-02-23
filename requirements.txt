@@ -1,0 +1,25 @@
+fastapi
+uvicorn
+opencv-python
+pydantic
+python-multipart
+requests
+# CountGD Requirements
+torch
+torchvision
+scipy
+shapely
+termcolor
+yacs
+matplotlib
+transformers
+addict
+yapf
+timm
+# New Features
+ultralytics
+rfdetr
+supervision
+pillow
+numpy
+sahi

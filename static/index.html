@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Annotator Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>Annotator</h2>
+            </div>
+
+
+
+            <div class="upload-section">
+                <h3>Import Media</h3>
+                <div class="upload-buttons">
+                    <button id="btn-upload-video" class="btn secondary">Upload Video</button>
+                    <input type="file" id="input-video" accept="video/*" hidden>
+
+                    <button id="btn-upload-images" class="btn secondary">Upload Images</button>
+                    <input type="file" id="input-images" webkitdirectory directory multiple hidden>
+                </div>
+
+                <div id="fps-control" class="fps-control hidden">
+                    <label for="fps-input">Extract FPS:</label>
+                    <div class="fps-input-group">
+                        <input type="number" id="fps-input" value="1" min="0.1" step="0.1">
+                        <button id="btn-extract" class="btn primary small">Extract</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="auto-annotate-section">
+                <h3>Auto Annotation</h3>
+
+                <div class="input-group">
+                    <label for="aa-model-type">Model Type:</label>
+                    <select id="aa-model-type" class="full-width-input">
+                        <option value="countgd">CountGD (Text Prompt)</option>
+                        <option value="yolo">YOLO (Pre-trained)</option>
+                        <option value="rfdetr">RF-DETR (Pre-trained)</option>
+                    </select>
+                </div>
+
+                <!-- CountGD Inputs -->
+                <div id="section-countgd">
+                    <div class="input-group">
+                        <label for="aa-prompt">Prompt:</label>
+                        <input type="text" id="aa-prompt" placeholder="e.g. person, car" class="full-width-input">
+                    </div>
+                </div>
+
+                <!-- Custom Model Inputs -->
+                <div id="section-custom-model" class="hidden">
+                    <div class="input-group">
+                        <label for="aa-model-file">Select Weights:</label>
+                        <select id="aa-model-file" class="full-width-input">
+                            <option value="" disabled selected>Select a model file...</option>
+                        </select>
+                        <div id="model-classes-display" class="classes-display hidden">
+                            <small>Available Classes:</small>
+                            <div id="model-classes-list" class="tags-container"></div>
+                        </div>
+                    </div>
+                    <div class="model-upload-row">
+                        <button id="btn-upload-model" class="btn secondary small">Upload Weights (.pt)</button>
+                        <input type="file" id="input-model-file" accept=".pt,.pth" hidden>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 10px;">
+                        <label for="aa-custom-label">Override Label (Optional):</label>
+                        <input type="text" id="aa-custom-label" placeholder="e.g. drone" class="full-width-input">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="aa-conf">Confidence: <span id="conf-val">0.25</span></label>
+                    <input type="range" id="aa-conf" min="0.1" max="0.9" step="0.05" value="0.25">
+                </div>
+
+                <div class="input-group" style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="aa-tiled" style="width: auto;">
+                    <label for="aa-tiled" style="margin: 0; cursor: pointer;">Enable Tiled Inference</label>
+                </div>
+                <button id="btn-auto-annotate" class="btn primary full-width">Run Auto-Annotation</button>
+                <button id="btn-auto-annotate-all" class="btn secondary full-width" style="margin-top: 5px;">Run on All
+                    Images</button>
+                <div id="aa-status" class="status-text"></div>
+            </div>
+
+            <div class="image-list-container">
+                <h3>Images <span id="image-count">(0)</span></h3>
+                <ul id="image-list" class="image-list">
+                    <!-- Items will be injected here -->
+                </ul>
+            </div>
+
+            <div class="tool-section">
+                <h3>Editor Tools</h3>
+
+                <div class="mode-toggle">
+                    <button id="btn-mode-draw" class="btn small active" title="Draw Mode (D)">Draw</button>
+                    <button id="btn-mode-pan" class="btn small" title="Pan Mode (P)">Pan</button>
+                </div>
+
+                <div class="zoom-controls" style="margin-top: 10px;">
+                    <button id="btn-zoom-out" class="btn small">-</button>
+                    <span id="zoom-level">100%</span>
+                    <button id="btn-zoom-in" class="btn small">+</button>
+                    <button id="btn-zoom-reset" class="btn small">Reset</button>
+                </div>
+                <button id="btn-delete-selected" class="btn danger full-width" disabled style="margin-top: 10px;">Delete
+                    Selected Box</button>
+            </div>
+
+            <div class="export-section">
+                <button id="btn-export" class="btn primary full-width">Export to COCO</button>
+                <button id="btn-reset-dataset" class="btn danger full-width" style="margin-top: 10px;">Reset
+                    Dataset</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="toolbar">
+                <div class="tool-group">
+                    <span id="current-filename">No image selected</span>
+                </div>
+                <div class="tool-group">
+                    <button id="btn-prev" class="btn icon-only" title="Previous Image">&lt;</button>
+                    <span id="image-counter">0 / 0</span>
+                    <button id="btn-next" class="btn icon-only" title="Next Image">&gt;</button>
+                </div>
+                <div class="tool-group">
+                    <label>Label: <input type="text" id="current-label" value="object"></label>
+                    <button id="btn-clear" class="btn danger small">Clear Box</button>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper" id="canvas-wrapper">
+                <div class="canvas-container">
+                    <canvas id="image-canvas"></canvas>
+                </div>
+                <div id="empty-state" class="empty-state">
+                    <p>Import a video or images to start annotating</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Export Progress Modal -->
+        <div id="export-modal" class="modal-overlay hidden">
+            <div class="modal">
+                <h3>Exporting to COCO</h3>
+                <p>Processing images and creating archive...</p>
+
+                <div class="progress-container">
+                    <div id="export-progress-bar" class="progress-bar" style="width: 0%"></div>
+                </div>
+                <p id="export-status-text" class="status-text-centered">Initializing...</p>
+
+                <div id="export-actions" class="hidden" style="margin-top: 20px;">
+                    <button id="btn-modal-reset" class="btn secondary">Start New Dataset</button>
+                    <button id="btn-modal-close" class="btn small" style="margin-left: 10px;">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=4"></script>
+</body>
+
+</html>
