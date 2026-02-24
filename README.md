@@ -75,7 +75,7 @@ If you are trying to upload a massive model file (e.g. `> 100MB`) and your brows
 ## 🎥 Demonstration
 Here is a quick look at the Annotator Pro UI in action, demonstrating the CountGD text-prompt auto-annotation feature and the built-in Editor Tools:
 
-![Annotator UI Demo](assets/annotator_demo.webp)
+[![Watch the video](https://img.youtube.com/vi/YOUR_VIDEO_ID/maxresdefault.jpg)](https://youtu.be/hS-LfiU4sec)
 
 ---
 
