@@ -100,7 +100,7 @@ class DetectorWrapper:
             self.model_cache[weights_path] = model
             return model
         except Exception as e:
-            raise RuntimeError(f"Failed to load YOLO model using Ultralytics. The file '{os.path.basename(weights_path)}' might be an RF-DETR model instead. Please try switching the model type. Details: {e}")
+            raise RuntimeError(f"Failed to load YOLO model. If this is a valid YOLO model, PyTorch may be failing to unpickle it (e.g. weights_only=True restriction or corrupted file). Details: {e}")
 
     def load_rfdetr(self, weights_path):
         if weights_path in self.model_cache:
