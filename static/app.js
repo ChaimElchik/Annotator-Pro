@@ -397,11 +397,18 @@ async function handleModelSelectionChange() {
         });
         const data = await res.json();
 
+        if (data.error) {
+            alert("Error loading model: " + data.error);
+            displayModelClasses([]);
+            return;
+        }
+
         const classes = data.classes || [];
         displayModelClasses(classes);
 
     } catch (err) {
         console.error("Failed to load classes", err);
+        alert("Failed to load classes: " + err.message);
         displayModelClasses([]);
     }
 }
