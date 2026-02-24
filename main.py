@@ -123,35 +123,25 @@ async def auto_annotate(req: AutoAnnotateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload_model")
-async def upload_model(
-    file: UploadFile = File(...),
-    chunk_index: int = Form(...),
-    total_chunks: int = Form(...),
-    filename: str = Form(...)
-):
-    if not filename.endswith(".pt") and not filename.endswith(".pth"):
+async def upload_model(file: UploadFile = File(...)):
+    if not file.filename.endswith(".pt") and not file.filename.endswith(".pth"):
          raise HTTPException(status_code=400, detail="Only .pt or .pth files supported")
          
-    file_path = os.path.join(MODEL_DIR, filename)
+    file_path = os.path.join(MODEL_DIR, file.filename)
     tmp_file_path = file_path + ".tmp"
     
     try:
-        # If it's the first chunk, ensure the tmp file is fresh
-        mode = "wb" if chunk_index == 0 else "ab"
-        
-        with open(tmp_file_path, mode) as buffer:
+        # Write to a temporary file first to avoid truncating a file that is 
+        # currently memory-mapped by PyTorch (which causes SIGBUS crashes).
+        with open(tmp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
-        # If it's the final chunk, atomically replace the old file with the new assembled tmp file.
-        # This prevents PyTorch SIGBUS crashes from truncating an active memory-mapped model.
-        if chunk_index == total_chunks - 1:
-            os.replace(tmp_file_path, file_path)
-            return {"status": "complete", "filename": filename, "message": "Model uploaded completely."}
-            
-        return {"status": "uploading", "message": f"Chunk {chunk_index+1}/{total_chunks} received."}
-
+                
+        # Atomically replace the old file with the new one
+        os.replace(tmp_file_path, file_path)
+        
+        return {"filename": file.filename, "message": "Model uploaded successfully"}
     except Exception as e:
-        print(f"Error during chunked file upload: {e}")
+        print(f"Error during file upload: {e}")
         if os.path.exists(tmp_file_path):
             os.remove(tmp_file_path)
         raise HTTPException(status_code=500, detail=str(e))
