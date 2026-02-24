@@ -331,74 +331,59 @@ async function handleModelUpload(e) {
         return;
     }
 
-    els.btnUploadModel.innerText = "Reading file into memory...";
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks to easily bypass request limits
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
     els.btnUploadModel.disabled = true;
 
-    // Read the file entirely into RAM first to prevent macOS sandbox / iCloud Drive virtual file
-    // asynchronous read stream aborts which trigger XHR 'Network Drops'.
-    const reader = new FileReader();
+    try {
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end);
 
-    reader.onerror = function () {
-        console.error("FileReader Error:", reader.error);
-        alert("Model upload failed: Could not read file from disk! (Is it an iCloud placeholder or locked by another app?)");
-        resetUploadModelBtn();
-    };
+            const formData = new FormData();
+            formData.append('file', chunk);
+            formData.append('chunk_index', chunkIndex);
+            formData.append('total_chunks', totalChunks);
+            formData.append('filename', file.name);
 
-    reader.onload = function (e) {
-        const arrayBuffer = e.target.result;
-        const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
+            // Update UI progress
+            const progress = Math.round((chunkIndex / totalChunks) * 100);
+            els.btnUploadModel.innerText = `Uploading... ${progress}%`;
 
-        const formData = new FormData();
-        formData.append('file', blob, file.name);
+            const res = await fetch('/api/upload_model', {
+                method: 'POST',
+                body: formData
+            });
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/upload_model', true);
-
-        xhr.upload.onprogress = function (event) {
-            if (event.lengthComputable) {
-                const percent = Math.round((event.loaded / event.total) * 100);
-                els.btnUploadModel.innerText = `Uploading... ${percent}%`;
-            } else {
-                els.btnUploadModel.innerText = `Uploading...`;
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Server status ${res.status}: ${errorText}`);
             }
-        };
 
-        xhr.onload = async function () {
-            if (xhr.status >= 200 && xhr.status < 300) {
+            // If it's the final chunk, we're done uploading
+            if (chunkIndex === totalChunks - 1) {
                 els.btnUploadModel.innerText = `Processing model...`;
+
+                await fetchModels();
+                els.aaModelFile.value = file.name;
+
                 try {
-                    await fetchModels();
-                    els.aaModelFile.value = file.name;
                     await handleModelSelectionChange();
                     alert("Model weights uploaded successfully!");
                 } catch (err) {
-                    console.error("Error updating UI after upload:", err);
+                    console.error(err);
                     alert("Model configured, but loading classes failed. You may proceed.");
                 }
-            } else {
-                console.error("Upload failed with status:", xhr.status, xhr.responseText);
-                alert(`Model upload failed: Server returned ${xhr.status} \nDetails: ${xhr.responseText}`);
             }
-            resetUploadModelBtn();
-        };
-
-        xhr.onerror = function (event) {
-            console.error("XHR Network Error:", event);
-            alert("Model upload failed: Network connection dropped! (Are you on a stable connection?)");
-            resetUploadModelBtn();
-        };
-
-        try {
-            els.btnUploadModel.innerText = "Uploading... 0%";
-            xhr.send(formData);
-        } catch (err) {
-            console.error("XHR send error", err);
-            alert("Model upload failed to send: " + err.message);
-            resetUploadModelBtn();
         }
-    };
-
-    reader.readAsArrayBuffer(file);
+    } catch (err) {
+        console.error("Chunked upload failed:", err);
+        alert("Model upload failed: " + err.message + " (Check terminal logs for details)");
+    } finally {
+        resetUploadModelBtn();
+    }
 }
 
 function resetUploadModelBtn() {
