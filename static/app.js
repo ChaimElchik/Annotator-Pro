@@ -334,30 +334,50 @@ async function handleModelUpload(e) {
     const formData = new FormData();
     formData.append('file', file);
 
-    els.btnUploadModel.innerText = "Uploading...";
+    els.btnUploadModel.innerText = "Uploading (Please wait)...";
     els.btnUploadModel.disabled = true;
 
+    // Use XMLHttpRequest to avoid Safari fetch() bug with large FormData uploads
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload_model', true);
+
+    xhr.onload = async function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+                await fetchModels();
+                els.aaModelFile.value = file.name;
+                await handleModelSelectionChange(); // await to make sure classes load before alert
+                alert("Model weights uploaded successfully!");
+            } catch (err) {
+                console.error(err);
+                alert("Model configured, but loading classes failed. You may proceed.");
+            }
+        } else {
+            console.error("Upload failed with status:", xhr.status);
+            alert("Model upload failed: Server returned " + xhr.status);
+        }
+        resetUploadModelBtn();
+    };
+
+    xhr.onerror = function () {
+        console.error("XHR Network Error");
+        alert("Model upload failed: Network Error (Is the server running?)");
+        resetUploadModelBtn();
+    };
+
     try {
-        const res = await fetch('/api/upload_model', {
-            method: 'POST',
-            body: formData
-        });
-        if (!res.ok) throw new Error("Upload failed");
-
-        await fetchModels();
-        // Select the uploaded model
-        els.aaModelFile.value = file.name;
-        handleModelSelectionChange();
-        alert("Model weights uploaded successfully!");
-
+        xhr.send(formData);
     } catch (err) {
-        console.error(err);
-        alert("Model upload failed: " + err.message);
-    } finally {
-        els.inputModelFile.value = '';
-        els.btnUploadModel.innerText = "Upload Weights (.pt)";
-        els.btnUploadModel.disabled = false;
+        console.error("XHR send error", err);
+        alert("Model upload failed to send: " + err.message);
+        resetUploadModelBtn();
     }
+}
+
+function resetUploadModelBtn() {
+    els.inputModelFile.value = '';
+    els.btnUploadModel.innerText = "Upload Weights (.pt)";
+    els.btnUploadModel.disabled = false;
 }
 
 

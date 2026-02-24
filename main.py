@@ -123,7 +123,7 @@ async def auto_annotate(req: AutoAnnotateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload_model")
-async def upload_model(file: UploadFile = File(...)):
+def upload_model(file: UploadFile = File(...)):
     if not file.filename.endswith(".pt") and not file.filename.endswith(".pth"):
          raise HTTPException(status_code=400, detail="Only .pt or .pth files supported")
          
@@ -511,5 +511,5 @@ if not os.path.exists(static_path):
 app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 
 if __name__ == "__main__":
-    print("Starting AnnotatorV2 server on http://127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    print("Starting AnnotatorV2 server on http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
