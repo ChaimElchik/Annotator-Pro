@@ -347,12 +347,15 @@ async function handleModelUpload(e) {
         await fetchModels();
         // Select the uploaded model
         els.aaModelFile.value = file.name;
+        alert("Model weights uploaded successfully!");
 
     } catch (err) {
         console.error(err);
         alert("Model upload failed: " + err.message);
     } finally {
         els.inputModelFile.value = '';
+        els.btnUploadModel.innerText = "Upload Weights (.pt)";
+        els.btnUploadModel.disabled = false;
     }
 }
 
