@@ -331,56 +331,74 @@ async function handleModelUpload(e) {
         return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    els.btnUploadModel.innerText = "Uploading (Please wait)...";
+    els.btnUploadModel.innerText = "Reading file into memory...";
     els.btnUploadModel.disabled = true;
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload_model', true);
+    // Read the file entirely into RAM first to prevent macOS sandbox / iCloud Drive virtual file
+    // asynchronous read stream aborts which trigger XHR 'Network Drops'.
+    const reader = new FileReader();
 
-    xhr.upload.onprogress = function (event) {
-        if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            els.btnUploadModel.innerText = `Uploading... ${percent}%`;
-        } else {
-            els.btnUploadModel.innerText = `Uploading...`;
-        }
+    reader.onerror = function () {
+        console.error("FileReader Error:", reader.error);
+        alert("Model upload failed: Could not read file from disk! (Is it an iCloud placeholder or locked by another app?)");
+        resetUploadModelBtn();
     };
 
-    xhr.onload = async function () {
-        if (xhr.status >= 200 && xhr.status < 300) {
-            els.btnUploadModel.innerText = `Processing model...`;
-            try {
-                await fetchModels();
-                els.aaModelFile.value = file.name;
-                await handleModelSelectionChange();
-                alert("Model weights uploaded successfully!");
-            } catch (err) {
-                console.error("Error updating UI after upload:", err);
-                alert("Model configured, but loading classes failed. You may proceed.");
+    reader.onload = function (e) {
+        const arrayBuffer = e.target.result;
+        const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
+
+        const formData = new FormData();
+        formData.append('file', blob, file.name);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload_model', true);
+
+        xhr.upload.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                els.btnUploadModel.innerText = `Uploading... ${percent}%`;
+            } else {
+                els.btnUploadModel.innerText = `Uploading...`;
             }
-        } else {
-            console.error("Upload failed with status:", xhr.status, xhr.responseText);
-            alert(`Model upload failed: Server returned ${xhr.status} \nDetails: ${xhr.responseText}`);
+        };
+
+        xhr.onload = async function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                els.btnUploadModel.innerText = `Processing model...`;
+                try {
+                    await fetchModels();
+                    els.aaModelFile.value = file.name;
+                    await handleModelSelectionChange();
+                    alert("Model weights uploaded successfully!");
+                } catch (err) {
+                    console.error("Error updating UI after upload:", err);
+                    alert("Model configured, but loading classes failed. You may proceed.");
+                }
+            } else {
+                console.error("Upload failed with status:", xhr.status, xhr.responseText);
+                alert(`Model upload failed: Server returned ${xhr.status} \nDetails: ${xhr.responseText}`);
+            }
+            resetUploadModelBtn();
+        };
+
+        xhr.onerror = function (event) {
+            console.error("XHR Network Error:", event);
+            alert("Model upload failed: Network connection dropped! (Are you on a stable connection?)");
+            resetUploadModelBtn();
+        };
+
+        try {
+            els.btnUploadModel.innerText = "Uploading... 0%";
+            xhr.send(formData);
+        } catch (err) {
+            console.error("XHR send error", err);
+            alert("Model upload failed to send: " + err.message);
+            resetUploadModelBtn();
         }
-        resetUploadModelBtn();
     };
 
-    xhr.onerror = function (event) {
-        console.error("XHR Network Error:", event);
-        alert("Model upload failed: Network connection dropped! (Are you on a stable connection?)");
-        resetUploadModelBtn();
-    };
-
-    try {
-        xhr.send(formData);
-    } catch (err) {
-        console.error("XHR send error", err);
-        alert("Model upload failed to send: " + err.message);
-        resetUploadModelBtn();
-    }
+    reader.readAsArrayBuffer(file);
 }
 
 function resetUploadModelBtn() {
