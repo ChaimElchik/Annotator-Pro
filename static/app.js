@@ -337,33 +337,48 @@ async function handleModelUpload(e) {
     els.btnUploadModel.innerText = "Uploading (Please wait)...";
     els.btnUploadModel.disabled = true;
 
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload_model', true);
+
+    xhr.upload.onprogress = function (event) {
+        if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            els.btnUploadModel.innerText = `Uploading... ${percent}%`;
+        } else {
+            els.btnUploadModel.innerText = `Uploading...`;
+        }
+    };
+
+    xhr.onload = async function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            els.btnUploadModel.innerText = `Processing model...`;
+            try {
+                await fetchModels();
+                els.aaModelFile.value = file.name;
+                await handleModelSelectionChange();
+                alert("Model weights uploaded successfully!");
+            } catch (err) {
+                console.error("Error updating UI after upload:", err);
+                alert("Model configured, but loading classes failed. You may proceed.");
+            }
+        } else {
+            console.error("Upload failed with status:", xhr.status, xhr.responseText);
+            alert(`Model upload failed: Server returned ${xhr.status} \nDetails: ${xhr.responseText}`);
+        }
+        resetUploadModelBtn();
+    };
+
+    xhr.onerror = function (event) {
+        console.error("XHR Network Error:", event);
+        alert("Model upload failed: Network connection dropped! (Are you on a stable connection?)");
+        resetUploadModelBtn();
+    };
+
     try {
-        const res = await fetch('/api/upload_model', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`Server status ${res.status}: ${errorText}`);
-        }
-
-        els.btnUploadModel.innerText = `Processing model...`;
-
-        await fetchModels();
-        els.aaModelFile.value = file.name;
-
-        try {
-            await handleModelSelectionChange();
-            alert("Model weights uploaded successfully!");
-        } catch (err) {
-            console.error(err);
-            alert("Model configured, but loading classes failed. You may proceed.");
-        }
+        xhr.send(formData);
     } catch (err) {
-        console.error("Upload failed:", err);
-        alert("Model upload failed: " + err.message + " (Check terminal logs for details)");
-    } finally {
+        console.error("XHR send error", err);
+        alert("Model upload failed to send: " + err.message);
         resetUploadModelBtn();
     }
 }
