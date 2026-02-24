@@ -123,16 +123,31 @@ async def auto_annotate(req: AutoAnnotateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload_model")
-def upload_model(file: UploadFile = File(...)):
+async def upload_model(file: UploadFile = File(...)):
     if not file.filename.endswith(".pt") and not file.filename.endswith(".pth"):
          raise HTTPException(status_code=400, detail="Only .pt or .pth files supported")
          
     file_path = os.path.join(MODEL_DIR, file.filename)
+    tmp_file_path = file_path + ".tmp"
+    
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Write to a temporary file first to avoid truncating a file that is 
+        # currently memory-mapped by PyTorch (which causes SIGBUS crashes).
+        with open(tmp_file_path, "wb") as buffer:
+            while True:
+                chunk = await file.read(1024 * 1024)  # 1MB chunks
+                if not chunk:
+                    break
+                buffer.write(chunk)
+                
+        # Atomically replace the old file with the new one
+        os.replace(tmp_file_path, file_path)
+        
         return {"filename": file.filename, "message": "Model uploaded successfully"}
     except Exception as e:
+        print(f"Error during file upload: {e}")
+        if os.path.exists(tmp_file_path):
+            os.remove(tmp_file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/models")
