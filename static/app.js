@@ -62,7 +62,7 @@ const els = {
     sectionCustomModel: document.getElementById('section-custom-model'),
 
     aaPrompt: document.getElementById('aa-prompt'),
-    aaCustomLabel: document.getElementById('aa-custom-label'),
+
 
     aaModelFile: document.getElementById('aa-model-file'),
     btnUploadModel: document.getElementById('btn-upload-model'),
@@ -411,8 +411,6 @@ async function handleModelSelectionChange() {
     const type = els.aaModelType.value;
     if (!filename || !type) return;
 
-    // Clear custom label to encourage native class usage
-    els.aaCustomLabel.value = "";
 
     try {
         const res = await fetch('/api/load_model_classes', {
@@ -581,8 +579,7 @@ async function handleAutoAnnotate() {
         if (prompt) payload.text_prompt = prompt;
         if (filename) payload.model_filename = filename;
 
-        const customLabel = els.aaCustomLabel.value.trim();
-        if (customLabel) payload.custom_label = customLabel;
+
 
         const res = await fetch('/api/auto_annotate', {
             method: 'POST',
@@ -1226,8 +1223,7 @@ async function handleAutoAnnotateAll() {
     if (prompt) basePayload.text_prompt = prompt;
     if (filename) basePayload.model_filename = filename;
 
-    const customLabel = els.aaCustomLabel.value.trim();
-    if (customLabel) basePayload.custom_label = customLabel;
+
 
     for (const imageName of state.images) {
         processed++;

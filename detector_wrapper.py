@@ -173,7 +173,7 @@ class DetectorWrapper:
 
     def run_inference(self, image_path: str, model_type: str = "countgd", model_path: str = None, 
                       text_prompt: str = None, confidence: float = 0.25, selected_classes: list = None,
-                      custom_label: str = None, tiled: bool = False):
+                      tiled: bool = False):
         
         img = Image.open(image_path).convert("RGB")
         w_img, h_img = img.size
@@ -252,7 +252,7 @@ class DetectorWrapper:
                         box = xyxy[i]
                         x1, y1, x2, y2 = float(box[0]), float(box[1]), float(box[2]), float(box[3])
                         conf = float(confs[i]) if confs is not None else 1.0
-                        label_to_use = custom_label if custom_label else text_prompt
+                        label_to_use = text_prompt
                         
                         results.append({
                             "id": str(uuid.uuid4()),
@@ -285,7 +285,7 @@ class DetectorWrapper:
                     x_px = (xc * w_img) - (width_px / 2)
                     y_px = (yc * h_img) - (height_px / 2)
                     
-                    label_to_use = custom_label if custom_label else text_prompt
+                    label_to_use = text_prompt
 
                     results.append({
                         "id": str(uuid.uuid4()),
@@ -344,7 +344,7 @@ class DetectorWrapper:
                     if selected_classes and len(selected_classes) > 0 and cid not in selected_classes:
                         continue
                         
-                    label = custom_label if custom_label else name
+                    label = name
                     
                     results.append({
                         "id": str(uuid.uuid4()),
@@ -370,7 +370,7 @@ class DetectorWrapper:
                     if selected_classes and len(selected_classes) > 0 and cls_id not in selected_classes:
                         continue
                         
-                    label = custom_label if custom_label else names[cls_id]
+                    label = names[cls_id]
                     
                     # xyxy
                     coords = box.xyxy[0].tolist()
@@ -435,31 +435,28 @@ class DetectorWrapper:
 
                      
                      # Determine label
-                     if custom_label and custom_label.strip():
-                         label_to_use = custom_label
-                     else:
-                         # Mapping Logic:
-                         # The model dict is {1: 'person', 2: 'animal'}
-                         # The inference likely returns 0-indexed classes (0="person", 1="animal").
-                         # If we use direct lookup: 0->None, 1->"person". This is wrong for "animal".
-                         # We detect if the dict is 1-based and shift if necessary.
+                     # Mapping Logic:
+                     # The model dict is {1: 'person', 2: 'animal'}
+                     # The inference likely returns 0-indexed classes (0="person", 1="animal").
+                     # If we use direct lookup: 0->None, 1->"person". This is wrong for "animal".
+                     # We detect if the dict is 1-based and shift if necessary.
+                     
+                     is_1_based = (0 not in class_dict) and (1 in class_dict)
+                     
+                     lookup_id = cid
+                     if is_1_based:
+                         lookup_id = cid + 1
                          
-                         is_1_based = (0 not in class_dict) and (1 in class_dict)
+                     label = class_dict.get(lookup_id, None)
+                     
+                     if label is None:
+                         # Fallback, try string or raw
+                         label = class_dict.get(cid, None)
                          
-                         lookup_id = cid
-                         if is_1_based:
-                             lookup_id = cid + 1
-                             
-                         label = class_dict.get(lookup_id, None)
+                     if label is None:
+                         label = f"object_{cid}"
                          
-                         if label is None:
-                             # Fallback, try string or raw
-                             label = class_dict.get(cid, None)
-                             
-                         if label is None:
-                             label = f"object_{cid}"
-                             
-                         label_to_use = label
+                     label_to_use = label
 
                      print(f"DEBUG: Detection {i}: CID={cid} -> LookupID={lookup_id}, Label={label_to_use}")
 

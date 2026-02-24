@@ -91,7 +91,6 @@ class AutoAnnotateRequest(BaseModel):
     model_type: str = "countgd" # countgd, yolo, rfdetr
     model_filename: Optional[str] = None
     selected_classes: Optional[List[int]] = None
-    custom_label: Optional[str] = None # Override label name
     tiled: bool = False # Enable Tiled Inference (sahi/slicer)
 
 @app.post("/api/auto_annotate")
@@ -113,7 +112,6 @@ async def auto_annotate(req: AutoAnnotateRequest):
             text_prompt=req.text_prompt, 
             confidence=req.confidence_thresh,
             selected_classes=req.selected_classes,
-            custom_label=req.custom_label,
             tiled=req.tiled
         )
         
