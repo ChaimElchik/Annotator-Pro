@@ -352,15 +352,28 @@ async function handleModelUpload(e) {
             const progress = Math.round((chunkIndex / totalChunks) * 100);
             els.btnUploadModel.innerText = `Uploading... ${progress}%`;
 
-            const res = await fetch('/api/upload_model', {
-                method: 'POST',
-                body: formData
-            });
+            await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/upload_model', true);
 
-            if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(`Server status ${res.status}: ${errorText}`);
-            }
+                xhr.onload = function () {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(new Error(`Server status ${xhr.status}: ${xhr.responseText}`));
+                    }
+                };
+
+                xhr.onerror = function () {
+                    reject(new Error("Network connection dropped during chunk upload."));
+                };
+
+                try {
+                    xhr.send(formData);
+                } catch (e) {
+                    reject(new Error("Failed to send XHR: " + e.message));
+                }
+            });
 
             // If it's the final chunk, we're done uploading
             if (chunkIndex === totalChunks - 1) {
