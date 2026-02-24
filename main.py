@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 import time
 import threading
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -146,6 +146,31 @@ async def upload_model(file: UploadFile = File(...)):
         return {"filename": file.filename, "message": "Model uploaded successfully"}
     except Exception as e:
         print(f"Error during file upload: {e}")
+        if os.path.exists(tmp_file_path):
+            os.remove(tmp_file_path)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/upload_model_direct")
+async def upload_model_direct(request: Request, filename: str):
+    if not filename.endswith(".pt") and not filename.endswith(".pth"):
+         raise HTTPException(status_code=400, detail="Only .pt or .pth files supported")
+         
+    file_path = os.path.join(MODEL_DIR, filename)
+    tmp_file_path = file_path + ".tmp"
+    
+    try:
+        # Avoid python-multipart parsing bottleneck by reading the raw octet stream.
+        # Still write to a tmp file to prevent PyTorch SIGBUS crashes.
+        with open(tmp_file_path, "wb") as buffer:
+            async for chunk in request.stream():
+                buffer.write(chunk)
+                
+        # Atomically replace the old file with the new one
+        os.replace(tmp_file_path, file_path)
+        
+        return {"filename": filename, "message": "Model uploaded successfully via stream"}
+    except Exception as e:
+        print(f"Error during raw file upload: {e}")
         if os.path.exists(tmp_file_path):
             os.remove(tmp_file_path)
         raise HTTPException(status_code=500, detail=str(e))

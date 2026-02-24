@@ -333,14 +333,16 @@ async function handleModelUpload(e) {
 
     const formData = new FormData();
     formData.append('file', file);
-
     els.btnUploadModel.innerText = "Uploading (Please wait)...";
     els.btnUploadModel.disabled = true;
 
     try {
-        const res = await fetch('/api/upload_model', {
+        const res = await fetch(`/api/upload_model_direct?filename=${encodeURIComponent(file.name)}`, {
             method: 'POST',
-            body: formData
+            body: file,
+            headers: {
+                'Content-Type': 'application/octet-stream'
+            }
         });
 
         if (!res.ok) {
