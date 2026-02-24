@@ -46,17 +46,27 @@ If you plan to use the "CountGD (Text Prompt)" AI auto-annotation feature, you m
 
 ## Starting the Application
 
-Whenever you want to use the tool, run the start script. 
+Whenever you want to use the tool, run the start script. **We highly recommend using Google Chrome or Microsoft Edge** for the most stable experience, especially when dealing with massive datasets or file uploads.
 
 ### 🍎 Mac:
 1. Double-click **`run_mac.command`**.
-2. A terminal window will open, start the application server, and automatically open your web browser to `http://localhost:8000`.
-3. Keep the terminal window open while you use the app! To stop the tool, close the terminal window or press `Ctrl + C`.
+2. A terminal window will open, start the application server, and automatically open your web browser.
+3. If it doesn't open automatically, or if you want to use a specific browser like Chrome, open it manually and navigate to `http://localhost:8000` or `http://127.0.0.1:8000`.
+4. Keep the terminal window open while you use the app! To stop the tool, close the terminal window or press `Ctrl + C`.
 
 ### 🪟 Windows:
 1. Double-click **`run_windows.bat`**.
-2. A command prompt window will open to start the server, and your web browser will automatically open to `http://localhost:8000`.
-3. Keep the dark command prompt window open while you use the app! To stop the tool, freely close that window.
+2. A command prompt window will open to start the server, and your web browser will automatically open.
+3. If it doesn't open automatically, or if you want to use a specific browser like Chrome, open it manually and navigate to `http://localhost:8000` or `http://127.0.0.1:8000`.
+4. Keep the dark command prompt window open while you use the app! To stop the tool, freely close that window.
+
+---
+
+### 💡 Troubleshooting: "Network connection dropped" during model upload
+If you are trying to upload a massive model file (e.g. `> 100MB`) and your browser continuously aborts the connection:
+1. Open the video annotator folder in your file explorer (Finder/Explorer).
+2. Manually copy your `.pt` or `.pth` weights file and paste it directly into the `data/models` subfolder.
+3. Refresh the Annotator UI, and the model will instantly appear in the dropdown!
 
 ---
 
