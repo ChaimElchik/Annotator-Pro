@@ -347,6 +347,7 @@ async function handleModelUpload(e) {
         await fetchModels();
         // Select the uploaded model
         els.aaModelFile.value = file.name;
+        handleModelSelectionChange();
         alert("Model weights uploaded successfully!");
 
     } catch (err) {
