@@ -331,38 +331,56 @@ async function handleModelUpload(e) {
         return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    els.btnUploadModel.innerText = "Uploading (Please wait)...";
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks to easily bypass request limits
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
     els.btnUploadModel.disabled = true;
 
     try {
-        const res = await fetch(`/api/upload_model_direct?filename=${encodeURIComponent(file.name)}`, {
-            method: 'POST',
-            body: file,
-            headers: {
-                'Content-Type': 'application/octet-stream'
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append('file', chunk);
+            formData.append('chunk_index', chunkIndex);
+            formData.append('total_chunks', totalChunks);
+            formData.append('filename', file.name);
+
+            // Update UI progress
+            const progress = Math.round((chunkIndex / totalChunks) * 100);
+            els.btnUploadModel.innerText = `Uploading... ${progress}%`;
+
+            const res = await fetch('/api/upload_model', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Server status ${res.status}: ${errorText}`);
             }
-        });
 
-        if (!res.ok) {
-            throw new Error(`Server returned status ${res.status}`);
+            // If it's the final chunk, we're done uploading
+            if (chunkIndex === totalChunks - 1) {
+                els.btnUploadModel.innerText = `Processing model...`;
+
+                await fetchModels();
+                els.aaModelFile.value = file.name;
+
+                try {
+                    await handleModelSelectionChange();
+                    alert("Model weights uploaded successfully!");
+                } catch (err) {
+                    console.error(err);
+                    alert("Model configured, but loading classes failed. You may proceed.");
+                }
+            }
         }
-
-        await fetchModels();
-        els.aaModelFile.value = file.name;
-
-        try {
-            await handleModelSelectionChange();
-            alert("Model weights uploaded successfully!");
-        } catch (err) {
-            console.error(err);
-            alert("Model configured, but loading classes failed. You may proceed.");
-        }
-
     } catch (err) {
-        console.error("Upload failed:", err);
-        alert("Model upload failed: " + err.message + " (If large file, ensure stable connection)");
+        console.error("Chunked upload failed:", err);
+        alert("Model upload failed: " + err.message + " (Check terminal logs for details)");
     } finally {
         resetUploadModelBtn();
     }
