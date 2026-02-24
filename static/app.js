@@ -305,6 +305,10 @@ function handleModelTypeChange() {
     // Clear potentially stale classes first
     displayModelClasses([]);
 
+    // Reset upload button state
+    els.btnUploadModel.innerText = "Upload Weights (.pt)";
+    els.btnUploadModel.disabled = false;
+
     if (type === 'countgd') {
         els.sectionCountGD.classList.remove('hidden');
         els.sectionCustomModel.classList.add('hidden');
@@ -312,10 +316,8 @@ function handleModelTypeChange() {
         els.sectionCountGD.classList.add('hidden');
         els.sectionCustomModel.classList.remove('hidden');
 
-        // If a model is already selected, try to reload classes for the new type
-        if (els.aaModelFile.value) {
-            handleModelSelectionChange();
-        }
+        // Reset the selected model file so users must explicitly choose one for the new type
+        els.aaModelFile.value = "";
     }
 }
 

@@ -1,10 +1,10 @@
-# Video Annotator Pro
+# Annotator Pro
 
 A powerful, web-based tool for annotating images and video frames for computer vision tasks. It supports manual annotation and AI-powered auto-annotation using state-of-the-art models like CountGD, YOLO, and RF-DETR.
 
 ## Prerequisites: Install Python
 
-Before you can run Video Annotator Pro, your computer needs to have Python installed.
+Before you can run Annotator Pro, your computer needs to have Python installed.
 
 ### 🍎 For Mac Users:
 1. Go to the [Python Downloads page for Mac](https://www.python.org/downloads/mac-osx/).
@@ -24,6 +24,11 @@ Before you can run Video Annotator Pro, your computer needs to have Python insta
 ## Installation & First-Time Setup
 
 Once Python is installed, follow these instructions to set up the tool. You only need to do this **once**.
+
+### 0. Download CountGD Weights
+If you plan to use the "CountGD (Text Prompt)" AI auto-annotation feature, you must first download the model weights:
+1. Download the `checkpoint_fsc147_best.pth` file from this [GitHub Release](https://github.com/ChaimElchik/Annotator-Pro/releases/download/v1.0.0/checkpoint_fsc147_best.pth).
+2. Place the downloaded `.pth` file directly into your `Annotator-Pro` (or `Github version`) folder (the same folder that contains `main.py`).
 
 ### 🍎 Mac:
 1. Open the folder containing the Video Annotator Pro files.

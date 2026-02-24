@@ -182,38 +182,120 @@ class DetectorWrapper:
         
         if model_type.lower() == "countgd":
             self.load_countgd()
-            # detector_logic returns: [class, xc, yc, w, h, conf] normalized
-            boxes = detector_logic.run_detector_inference(
-                self.countgd_model, 
-                self.countgd_transform, 
-                img, 
-                text_prompt, 
-                self.countgd_device, 
-                confidence_thresh=confidence
-            )
             
-            for box in boxes:
-                # box = [class, xc, yc, w, h, conf]
-                xc, yc, w, h = box[1], box[2], box[3], box[4]
-                conf = box[5]
+            if tiled and sv is not None:
+                print(f"Running Tiled CountGD Inference on {image_path}...")
                 
-                # Convert normalized to pixels
-                width_px = w * w_img
-                height_px = h * h_img
-                x_px = (xc * w_img) - (width_px / 2)
-                y_px = (yc * h_img) - (height_px / 2)
-                
-                label_to_use = custom_label if custom_label else text_prompt
+                def countgd_callback(image_slice: np.ndarray, model, transform, device, text_prompt, conf_thresh) -> sv.Detections:
+                    slice_pil = Image.fromarray(cv2.cvtColor(image_slice, cv2.COLOR_BGR2RGB))
+                    w_slice, h_slice = slice_pil.size
+                    
+                    boxes_norm = detector_logic.run_detector_inference(
+                        model, transform, slice_pil, text_prompt, device, confidence_thresh=conf_thresh
+                    )
+                    
+                    if not boxes_norm:
+                        return sv.Detections.empty()
+                        
+                    xyxy_list = []
+                    class_id_list = []
+                    conf_list = []
+                    
+                    for b in boxes_norm:
+                        # b is [class_id, xc, yc, w, h, conf] normalized
+                        cid = b[0]
+                        xc = b[1] * w_slice
+                        yc = b[2] * h_slice
+                        w = b[3] * w_slice
+                        h = b[4] * h_slice
+                        conf = b[5]
+                        
+                        x1 = xc - w / 2
+                        y1 = yc - h / 2
+                        x2 = xc + w / 2
+                        y2 = yc + h / 2
+                        
+                        xyxy_list.append([x1, y1, x2, y2])
+                        class_id_list.append(cid)
+                        conf_list.append(conf)
+                        
+                    return sv.Detections(
+                        xyxy=np.array(xyxy_list, dtype=np.float32),
+                        confidence=np.array(conf_list, dtype=np.float32),
+                        class_id=np.array(class_id_list, dtype=np.int32)
+                    )
 
-                results.append({
-                    "id": str(uuid.uuid4()),
-                    "x": float(x_px),
-                    "y": float(y_px),
-                    "width": float(width_px),
-                    "height": float(height_px),
-                    "label": label_to_use,
-                    "confidence": float(conf)
-                })
+                callback_bound = partial(
+                    countgd_callback, 
+                    model=self.countgd_model, 
+                    transform=self.countgd_transform, 
+                    device=self.countgd_device, 
+                    text_prompt=text_prompt, 
+                    conf_thresh=confidence
+                )
+                
+                countgd_slicer = sv.InferenceSlicer(
+                    callback=callback_bound,
+                    slice_wh=(640, 640),
+                    iou_threshold=0.5
+                )
+                
+                image_bgr = cv2.imread(image_path)
+                detections = countgd_slicer(image_bgr)
+                
+                if hasattr(detections, 'xyxy'):
+                    xyxy = detections.xyxy
+                    class_ids = detections.class_id
+                    confs = detections.confidence
+                    
+                    for i in range(len(xyxy)):
+                        box = xyxy[i]
+                        x1, y1, x2, y2 = float(box[0]), float(box[1]), float(box[2]), float(box[3])
+                        conf = float(confs[i]) if confs is not None else 1.0
+                        label_to_use = custom_label if custom_label else text_prompt
+                        
+                        results.append({
+                            "id": str(uuid.uuid4()),
+                            "x": x1,
+                            "y": y1,
+                            "width": x2 - x1,
+                            "height": y2 - y1,
+                            "label": label_to_use,
+                            "confidence": conf
+                        })
+            else:
+                # detector_logic returns: [class, xc, yc, w, h, conf] normalized
+                boxes = detector_logic.run_detector_inference(
+                    self.countgd_model, 
+                    self.countgd_transform, 
+                    img, 
+                    text_prompt, 
+                    self.countgd_device, 
+                    confidence_thresh=confidence
+                )
+                
+                for box in boxes:
+                    # box = [class, xc, yc, w, h, conf]
+                    xc, yc, w, h = box[1], box[2], box[3], box[4]
+                    conf = box[5]
+                    
+                    # Convert normalized to pixels
+                    width_px = w * w_img
+                    height_px = h * h_img
+                    x_px = (xc * w_img) - (width_px / 2)
+                    y_px = (yc * h_img) - (height_px / 2)
+                    
+                    label_to_use = custom_label if custom_label else text_prompt
+
+                    results.append({
+                        "id": str(uuid.uuid4()),
+                        "x": float(x_px),
+                        "y": float(y_px),
+                        "width": float(width_px),
+                        "height": float(height_px),
+                        "label": label_to_use,
+                        "confidence": float(conf)
+                    })
 
 
 
