@@ -60,46 +60,52 @@ Whenever you want to use the tool, run the start script.
 
 ---
 
-## Features
+---
 
-### 1. Media Import
-- **Upload Video**: Upload a video file to automatically extract frames at a customizable FPS (Frames Per Second).
-- **Upload Images**: Upload a folder of images. Nested folders are automatically flattened so all images are imported into the main workspace.
+## 🎥 Demonstration
+Here is a quick look at the Annotator Pro UI in action, demonstrating the CountGD text-prompt auto-annotation feature and the built-in Editor Tools:
 
-### 2. Manual Annotation
-- **Draw Mode**: Click and drag to draw bounding boxes.
-- **Pan/Zoom**: Use the Pan tool or hold Spacebar + Click/Drag to navigate large images. Mouse wheel to zoom in/out.
-- **Editing**: Select existing boxes to move or resize (using corner handles).
-- **Deleting**: Select a box and press `Delete` or `Backspace` (or use the UI button) to remove it.
-
-### 3. AI Auto-Annotation
-Accelerate your workflow by using AI models to detect objects automatically.
-
-- **Models Supported**:
-    - **CountGD**: Open-set detector. Enter a **Text Prompt** (e.g., "person", "car") to detect specific objects without custom training.
-    - **YOLO (v8/v11)**: Upload your custom `.pt` weights file. The system will use your trained model for inference.
-    - **RF-DETR**: Upload custom `.pt` weights for transformer-based detection.
-
-- **Smart Features**:
-    - **Custom Label Override**: Force all detections to have a specific label (e.g., if your generic model detects "object" but you want "drone").
-    - **Confidence Threshold**: Adjust the slider to filter out weak detections.
-    - **Run on All**: Batch process the entirely loaded dataset matching your current settings.
-    - **Model Caching**: Loaded models are cached in memory for faster subsequent runs.
-
-### 4. Export & Verification
-- **Export to COCO**: Downloads a `.zip` file containing:
-    - All images.
-    - `_annotations.coco.json`: Standard COCO format annotations.
-- **Verification Script**: Use the included `verify_export_fix.py` to visually verify the exported dataset.
+![Annotator UI Demo](assets/annotator_demo.webp)
 
 ---
 
-## Workflow Example
-1.  **Import**: Click "Upload Video" (and set FPS) or "Upload Images" to load your dataset.
-2.  **Auto-Annotate (Optional)**:
-    -   Select a Model Type.
-    -   (For YOLO/RF-DETR) Upload your model `.pt` weights file using the UI.
-    -   (Optional) Enter an "Override Label" name.
-    -   Click "Run Auto-Annotation" for the current image or "Run on All Images" for the whole set.
-3.  **Refine**: Use the manual tools to fix mistakes, adjust boxes, or add missing labels.
-4.  **Export**: Click "Export to COCO" to download your dataset.
+## 🛠️ How It Works
+
+Annotator Pro is designed to be purely local, fast, and feature-rich. Here is a detailed breakdown of each major section of the UI.
+
+### 1. Media Import
+
+The tool supports importing bulk image folders or extracting frames directly from video files.
+- **Upload Video**: Click this to select an `.mp4` or `.mov` file. Specify your desired **Extract FPS** (Frames Per Second) and click **Extract**. The server will automatically break down the video into individual frames and load them.
+- **Upload Images**: Click this to select a folder on your computer. If your images are stored in nested folders, Annotator Pro will automatically flatten the directory structure so all images appear in the main workspace.
+
+When media is loaded, the files populate the **Images** panel on the left sidebar, acting as your directory tree. 
+
+### 2. Auto-Annotation (AI)
+
+Instead of manually drawing hundreds of boxes, use state-of-the-art AI models to automatically find objects for you. 
+
+*   **Model Type**:
+    *   **CountGD (Text Prompt)**: An open-set object detector. You do not need to train a model. Simply type the name of the object you want (e.g., "car", "person", "bird") in the **Prompt** box, and the AI will attempt to find it. Make sure you downloaded the weights during Setup!
+    *   **YOLO (v8/v11)**: If you have your own trained model weights, upload your `.pt` file here. The system will extract the classes your model was trained on automatically.
+    *   **RF-DETR**: Similar to YOLO, upload custom `.pt` weights for transformer-based detection.
+*   **Confidence Slider**: Adjust the slider to filter out weak detections. Higher values (e.g. `0.65`) mean the AI has to be very sure, while lower values (e.g. `0.20`) will catch more objects but potentially produce more false positives.
+*   **Enable Tiled Inference**: When hunting for very small objects in large high-resolution images, check this box. The AI will slice the image into smaller 640x640 overlapping tiles, run inference on each slice, and intelligently merge the boxes. Supported across all models!
+*   **Override Label**: Sometimes a generic YOLO model only outputs "object". If you type "drone" into the override setting, it will force all boxes generated by the AI to be labeled "drone".
+*   **Run on All Images**: Once you find the perfect confidence and prompt for your current image, you can click this to run the AI across your entire loaded dataset in the background.
+
+### 3. Editor Tools & Manual Refinement
+
+The main canvas is where you can manually draw, adjust, and correct annotations.
+- **Draw Mode (D)**: Click and drag to draw new bounding boxes.
+- **Pan Mode (P)**: Click and drag the image to move around. *Pro-tip: Hold the `Spacebar` while in Draw Mode to temporarily switch to Pan Mode!*
+- **Zooming**: Use your mouse wheel to zoom in and out of the image smoothly. You can also use the `+` and `-` buttons in the sidebar.
+- **Editing**: Click inside any existing box to select it. You can drag it to move it, or drag the corner handles to resize it perfectly.
+- **Deleting**: Select a box and press the `Delete` or `Backspace` key on your keyboard to instantly remove it.
+- **Labeling**: When a box is selected, you can change its class name in the "Label" text input located at the top toolbar.
+
+### 4. Export & Verification
+
+When you are done labeling your dataset:
+- **Export to COCO**: Click this button to generate a downloadable `.zip` file containing all of your images and a standardized `_annotations.coco.json` file.
+- **Verification Script**: If you want to double-check that your exported labels are perfectly aligned, run the included `verify_export_fix.py` script locally on the downloaded zip file to visually inspect the annotations.

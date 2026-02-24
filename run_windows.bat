@@ -18,7 +18,7 @@ echo Opening browser in 2 seconds...
 timeout /t 2 /nobreak >nul
 
 :: Open browser to the localhost address
-start http://localhost:8000
+start http://127.0.0.1:8000
 
 echo The application is running. 
 echo Keep the new "Video Annotator Pro Server" window open!

@@ -23,11 +23,11 @@ sleep 2
 
 # Attempt to open the browser
 if command -v open > /dev/null; then
-    open "http://localhost:8000"
+    open "http://127.0.0.1:8000"
 elif command -v xdg-open > /dev/null; then
-    xdg-open "http://localhost:8000"
+    xdg-open "http://127.0.0.1:8000"
 else
-    echo "Could not detect web browser command. Please open a browser manually and go to http://localhost:8000"
+    echo "Could not detect web browser command. Please open a browser manually and go to http://127.0.0.1:8000"
 fi
 
 echo "The application is running. Keep this window open."
