@@ -14,7 +14,7 @@ except ImportError:
     YOLO = None
 
 try:
-    from rfdetr import RFDETRMedium
+    from rfdetr import RFDETRMedium, RFDETRNano, RFDETRBase, RFDETRLarge
 except ImportError:
     RFDETRMedium = None
 
@@ -114,12 +114,35 @@ class DetectorWrapper:
         # Note: RF-DETR on MPS might be unstable as per user note.
         # device = "cpu" if self.device_str == "mps" else self.device_str
         
-        # Initialize with resolution=640 as seen in eval3.py
-        # Initialize with resolution=640 and device
+        # --- Dynamic Parameter Extraction ---
         try:
-            model = RFDETRMedium(
+            # We use weights_only=False because the RF-DETR checkpoints bundle a custom parser Namespace.
+            # However, we only need to read the dictionary headers, not fully instantiate the model yet.
+            ckpt = torch.load(weights_path, map_location='cpu', weights_only=False)
+            args = vars(ckpt.get('args', {})) if isinstance(ckpt, dict) else {}
+        except Exception as e:
+            print(f"Warning: Could not dynamically parse RF-DETR PyTorch arguments: {e}")
+            args = {}
+            
+        detected_res = args.get('resolution', 640)
+        detected_base = args.get('pretrain_weights', 'medium').lower() if args.get('pretrain_weights') else 'medium'
+        
+        print(f"RF-DETR Config Detected -> Resolution: {detected_res}, Scale: {detected_base}")
+
+        # --- Dynamic Instantiation ---
+        try:
+            if "nano" in detected_base:
+                modelclass = RFDETRNano
+            elif "base" in detected_base:
+                modelclass = RFDETRBase
+            elif "large" in detected_base:
+                modelclass = RFDETRLarge
+            else:
+                modelclass = RFDETRMedium  # Default backstop
+                
+            model = modelclass(
                 pretrain_weights=weights_path,
-                resolution=640,
+                resolution=detected_res,
                 device=self.device_str
             )
         except TypeError as te:
