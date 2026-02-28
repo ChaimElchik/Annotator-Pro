@@ -1294,9 +1294,10 @@ async function exportData() {
     updateExportProgress(0, "Starting export...");
 
     try {
+        const format = document.getElementById('export-format').value;
         // Start Job
-        const startRes = await fetch('/api/export/start', { method: 'POST' });
-        if (!startRes.ok) throw new Error("Failed to start export");
+        const startRes = await fetch(`/api/export/start?format=${format}`, { method: 'POST' });
+        if (!startRes.ok) throw new Error(`Failed to start export in ${format} format`);
         const { job_id } = await startRes.json();
 
         // Poll Status

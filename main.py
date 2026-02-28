@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import posixpath
 from typing import List, Dict, Optional
 from contextlib import asynccontextmanager
 import time
@@ -290,8 +291,8 @@ async def reset_dataset():
 # Basic in-memory job store
 export_jobs = {}
 
-def run_export_task(job_id: str):
-    """Background task to generate COCO zip"""
+def run_export_task(job_id: str, export_format: str = "coco"):
+    """Background task to generate export zip"""
     try:
         job = export_jobs[job_id]
         job["status"] = "processing"
@@ -396,7 +397,7 @@ def run_export_task(job_id: str):
             
             image_id += 1
             
-        # Update categories in COCO
+        # Update categories in mapping if they were only found in YOLO or added default
         coco_categories = []
         for name, cid in category_map.items():
             coco_categories.append({
@@ -417,10 +418,63 @@ def run_export_task(job_id: str):
         zip_path = os.path.join(DATA_DIR, zip_filename)
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            json_str = json.dumps(coco, indent=4)
-            zipf.writestr("_annotations.coco.json", json_str)
-            for img_path in valid_images:
-                zipf.write(img_path, arcname=os.path.join("images", os.path.basename(img_path)))
+            if export_format == "yolo":
+                # Write classes.txt and data.yaml at the root
+                classes_lines = []
+                # Sort categories by ID to ensure correct order
+                sorted_cats = sorted(category_map.items(), key=lambda x: x[1])
+                for name, _ in sorted_cats:
+                    classes_lines.append(name)
+                zipf.writestr("classes.txt", "\n".join(classes_lines))
+                
+                yaml_content = []
+                yaml_content.append("train: train/images")
+                yaml_content.append("val: ''  # No validation set provided")
+                yaml_content.append(f"nc: {len(classes_lines)}")
+                yaml_content.append(f"names: {json.dumps(classes_lines)}")
+                zipf.writestr("data.yaml", "\n".join(yaml_content))
+                
+                # Write images and labels inside train/ folder
+                for img_path in valid_images:
+                    img_name = os.path.basename(img_path)
+                    zipf.write(img_path, arcname=posixpath.join("train", "images", img_name))
+                    
+                    # Write label file if it exists
+                    label_filename = os.path.splitext(img_name)[0] + ".txt"
+                    if img_name in all_annotations:
+                        # Fetch image dimensions safely, but don't skip the whole item if PIL fails
+                        # We previously cached dimensions or default to fake values to avoid skipping exports
+                        w, h = 1, 1 # default
+                        try:
+                            with Image.open(img_path) as img:
+                                w, h = img.size
+                        except Exception:
+                            pass
+                        
+                        yolo_lines = []
+                        for box in all_annotations[img_name]:
+                            label = box.get("label", "object")
+                            cat_id = category_map[label]
+                            
+                            # Normalize
+                            norm_x_center = (box["x"] + box["width"] / 2.0) / w
+                            norm_y_center = (box["y"] + box["height"] / 2.0) / h
+                            norm_width = box["width"] / w
+                            norm_height = box["height"] / h
+                            
+                            yolo_lines.append(f"{cat_id} {norm_x_center:.6f} {norm_y_center:.6f} {norm_width:.6f} {norm_height:.6f}")
+                            
+                        if yolo_lines:
+                            zipf.writestr(posixpath.join("train", "labels", label_filename), "\n".join(yolo_lines))
+                    else:
+                        # Write empty label file
+                        zipf.writestr(posixpath.join("train", "labels", label_filename), "")
+            else:
+                # COCO format
+                json_str = json.dumps(coco, indent=4)
+                zipf.writestr("_annotations.coco.json", json_str)
+                for img_path in valid_images:
+                    zipf.write(img_path, arcname=os.path.join("images", os.path.basename(img_path)))
                 
         job["file_path"] = zip_path
         job["status"] = "completed"
@@ -434,7 +488,7 @@ def run_export_task(job_id: str):
 
 
 @app.post("/api/export/start")
-async def start_export():
+async def start_export(format: str = "coco"):
     job_id = str(uuid.uuid4())
     export_jobs[job_id] = {
         "id": job_id,
@@ -446,7 +500,7 @@ async def start_export():
         "error": None
     }
     
-    thread = threading.Thread(target=run_export_task, args=(job_id,))
+    thread = threading.Thread(target=run_export_task, args=(job_id, format))
     thread.start()
     
     return {"job_id": job_id}

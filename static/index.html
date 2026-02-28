@@ -119,7 +119,14 @@
             </div>
 
             <div class="export-section">
-                <button id="btn-export" class="btn primary full-width">Export to COCO</button>
+                <div class="input-group" style="margin-bottom: 10px;">
+                    <label for="export-format">Export Format:</label>
+                    <select id="export-format" class="full-width-input">
+                        <option value="coco">COCO (.json)</option>
+                        <option value="yolo">YOLO (.txt)</option>
+                    </select>
+                </div>
+                <button id="btn-export" class="btn primary full-width">Export</button>
                 <button id="btn-reset-dataset" class="btn danger full-width" style="margin-top: 10px;">Reset
                     Dataset</button>
             </div>
@@ -155,7 +162,7 @@
         <!-- Export Progress Modal -->
         <div id="export-modal" class="modal-overlay hidden">
             <div class="modal">
-                <h3>Exporting to COCO</h3>
+                <h3>Exporting Dataset</h3>
                 <p>Processing images and creating archive...</p>
 
                 <div class="progress-container">
