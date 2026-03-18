@@ -30,6 +30,12 @@ If you plan to use the "CountGD (Text Prompt)" AI auto-annotation feature, you m
 1. Download the `checkpoint_fsc147_best.pth` file from this [GitHub Release](https://github.com/ChaimElchik/Annotator-Pro/releases/download/v1.0.0/checkpoint_fsc147_best.pth).
 2. Place the downloaded `.pth` file directly into your `Annotator-Pro` (or `Github version`) folder (the same folder that contains `main.py`).
 
+### 0.5. Download SAM3 Weights (Optional)
+If you wish to use the powerful **SAM3 (Text Prompt)** feature, you must manually acquire the weights due to HuggingFace licensing terms:
+1. Go to the [SAM 3 model page on Hugging Face](https://huggingface.co/facebook/sam3) and accept the User Agreement.
+2. Download the `sam3.pt` file directly from their repository.
+3. In Annotator Pro, select "SAM3" from the model dropdown, and use the **Upload Weights** button to locate your downloaded `sam3.pt` file.
+
 ### 🍎 Mac:
 1. Open the folder containing the Video Annotator Pro files.
 2. Double-click **`setup_mac.command`**.

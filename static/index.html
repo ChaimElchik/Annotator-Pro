@@ -45,8 +45,11 @@
                     <label for="aa-model-type">Model Type:</label>
                     <select id="aa-model-type" class="full-width-input">
                         <option value="countgd">CountGD (Text Prompt)</option>
+                        <option value="groundingdino">GroundingDINO (Text Prompt)</option>
                         <option value="yolo">YOLO (Pre-trained)</option>
                         <option value="rfdetr">RF-DETR (Pre-trained)</option>
+                        <option value="sam2">SAM2 (Grounded Box -> Refine)</option>
+                        <option value="sam3">SAM3 (Text Prompt)</option>
                     </select>
                 </div>
 
@@ -70,8 +73,9 @@
                             <div id="model-classes-list" class="tags-container"></div>
                         </div>
                     </div>
-                    <div class="model-upload-row">
-                        <button id="btn-upload-model" class="btn secondary small">Upload Weights (.pt)</button>
+                    <div class="model-upload-row" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button id="btn-upload-model" class="btn secondary small" style="flex: 1;">Upload Weights (.pt)</button>
+                        <button id="btn-download-sam2" class="btn secondary small hidden" style="flex: 1;">Download SAM2s</button>
                         <input type="file" id="input-model-file" accept=".pt,.pth" hidden>
                     </div>
 

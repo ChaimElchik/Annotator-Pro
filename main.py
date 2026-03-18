@@ -165,6 +165,29 @@ async def get_models():
                 models.append(f)
     return {"models": models}
 
+def run_download_sam2_task():
+    try:
+        from ultralytics.utils.downloads import attempt_download_asset
+        for m in ["sam2_t.pt", "sam2_s.pt", "sam2_b.pt", "sam2_l.pt"]:
+            print(f"Downloading {m}...")
+            path = attempt_download_asset(m)
+            if path:
+                target_path = os.path.join(MODEL_DIR, m)
+                if os.path.abspath(path) != os.path.abspath(target_path):
+                    shutil.move(path, target_path)
+            print(f"Downloaded {m} successfully.")
+    except Exception as e:
+        print(f"Error downloading SAM2 models: {e}")
+
+@app.post("/api/download_sam2")
+async def download_sam2():
+    try:
+        run_download_sam2_task()
+        return {"status": "SAM2 models downloaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error downloading SAM2 models: {e}")
+
+
 class ModelClassesRequest(BaseModel):
     model_type: str
     model_filename: str

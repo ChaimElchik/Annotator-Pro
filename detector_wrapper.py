@@ -42,6 +42,10 @@ class DetectorWrapper:
         self.countgd_transform = None
         self.countgd_device = None
         
+        # Grounding DINO
+        self.grounding_dino_processor = None
+        self.grounding_dino_model = None
+
         # Cache for other models: path -> model_instance
         self.model_cache = {}
         
@@ -101,6 +105,48 @@ class DetectorWrapper:
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load YOLO model. If this is a valid YOLO model, PyTorch may be failing to unpickle it (e.g. weights_only=True restriction or corrupted file). Details: {e}")
+
+    def load_sam2(self, weights_path):
+        if weights_path in self.model_cache:
+            return self.model_cache[weights_path]
+            
+        if YOLO is None: # Since SAM belongs to ultralytics
+             raise ImportError("The 'ultralytics' library is not installed.")
+             
+        print(f"Loading SAM2 from {weights_path}...")
+        try:
+            from ultralytics import SAM
+            model = SAM(weights_path)
+            self.model_cache[weights_path] = model
+            return model
+        except Exception as e:
+            raise RuntimeError(f"Failed to load SAM2 model: {e}")
+
+    def load_grounding_dino(self):
+        if self.grounding_dino_model is None:
+            print("Loading Grounding DINO (Transformers)...")
+            from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+            self.grounding_dino_processor = AutoProcessor.from_pretrained("IDEA-Research/grounding-dino-tiny")
+            self.grounding_dino_model = AutoModelForZeroShotObjectDetection.from_pretrained("IDEA-Research/grounding-dino-tiny")
+            # Usually safe to run HF models on CUDA/MPS
+            self.grounding_dino_model.to(self.device_str)
+            print(f"Grounding DINO Loaded on {self.device_str}")
+
+    def load_sam3(self, weights_path, confidence=0.25):
+        # We instantiate predictably because SAM3SemanticPredictor binds to the selected confidence
+        if weights_path in self.model_cache and getattr(self.model_cache[weights_path], "conf", None) == confidence:
+            return self.model_cache[weights_path]
+            
+        print(f"Loading SAM3 Predictor from {weights_path}...")
+        try:
+            from ultralytics.models.sam import SAM3SemanticPredictor
+            overrides = dict(conf=confidence, task="segment", mode="predict", model=weights_path, verbose=False)
+            predictor = SAM3SemanticPredictor(overrides=overrides)
+            self.model_cache[weights_path] = predictor
+            setattr(predictor, "conf", confidence) # hack to track confidence state
+            return predictor
+        except Exception as e:
+            raise RuntimeError(f"Failed to load SAM3 model: {e}")
 
     def load_rfdetr(self, weights_path):
         if weights_path in self.model_cache:
@@ -166,7 +212,7 @@ class DetectorWrapper:
         """Returns list of class names or IDs. 
            (Kept for info purposes, though UI selection is removed)
         """
-        if model_type.lower() == "countgd":
+        if model_type.lower() in ["countgd", "sam2", "sam3", "groundingdino"]:
             return [] 
             
         if not model_path or not os.path.exists(model_path):
@@ -409,6 +455,227 @@ class DetectorWrapper:
                         "confidence": conf
                     })
 
+        elif model_type.lower() == "groundingdino":
+            if not text_prompt:
+                raise ValueError("Text prompt required for GroundingDINO")
+                
+            self.load_grounding_dino()
+            device_to_use = self.device_str
+            
+            if tiled and sv is not None:
+                print(f"Running Tiled GroundingDINO Inference on {image_path}...")
+                
+                def dino_callback(image_slice: np.ndarray, processor, model, device, prompt, conf) -> sv.Detections:
+                    slice_pil = Image.fromarray(cv2.cvtColor(image_slice, cv2.COLOR_BGR2RGB))
+                    inputs = processor(images=slice_pil, text=prompt + ".", return_tensors="pt").to(device)
+                    with torch.no_grad():
+                        outputs = model(**inputs)
+                    
+                    target_sizes = torch.tensor([slice_pil.size[::-1]])
+                    res_dino = processor.image_processor.post_process_object_detection(
+                        outputs, threshold=conf, target_sizes=target_sizes
+                    )[0]
+                    
+                    xyxy_list = []
+                    conf_list = []
+                    class_id_list = []
+                    for score, label_id, box in zip(res_dino["scores"], res_dino["labels"], res_dino["boxes"]):
+                        if float(score.item()) >= conf:
+                            xyxy_list.append(box.tolist())
+                            conf_list.append(float(score.item()))
+                            class_id_list.append(0)
+                            
+                    if not xyxy_list:
+                        return sv.Detections.empty()
+                        
+                    return sv.Detections(
+                        xyxy=np.array(xyxy_list, dtype=np.float32),
+                        confidence=np.array(conf_list, dtype=np.float32),
+                        class_id=np.array(class_id_list, dtype=np.int32)
+                    )
+
+                callback_bound = partial(
+                    dino_callback,
+                    processor=self.grounding_dino_processor,
+                    model=self.grounding_dino_model,
+                    device=device_to_use,
+                    prompt=text_prompt,
+                    conf=confidence
+                )
+                
+                slicer = sv.InferenceSlicer(callback=callback_bound, slice_wh=(640, 640), iou_threshold=0.5)
+                image_bgr = cv2.imread(image_path)
+                detections = slicer(image_bgr)
+                
+                if hasattr(detections, 'xyxy'):
+                    for i in range(len(detections.xyxy)):
+                        box = detections.xyxy[i]
+                        c = float(detections.confidence[i]) if detections.confidence is not None else 1.0
+                        results.append({
+                            "id": str(uuid.uuid4()),
+                            "x": float(box[0]),
+                            "y": float(box[1]),
+                            "width": float(box[2] - box[0]),
+                            "height": float(box[3] - box[1]),
+                            "label": text_prompt,
+                            "confidence": c
+                        })
+            else:
+                # Use original PIL image
+                inputs = self.grounding_dino_processor(images=img, text=text_prompt + ".", return_tensors="pt").to(device_to_use)
+                with torch.no_grad():
+                    outputs = self.grounding_dino_model(**inputs)
+                    
+                target_sizes = torch.tensor([img.size[::-1]])
+                res_dino = self.grounding_dino_processor.image_processor.post_process_object_detection(
+                    outputs, threshold=confidence, target_sizes=target_sizes
+                )[0]
+                
+                for score, label_id, box in zip(res_dino["scores"], res_dino["labels"], res_dino["boxes"]):
+                    if float(score.item()) < confidence:
+                        continue
+                    x1, y1, x2, y2 = box.tolist()
+                    results.append({
+                        "id": str(uuid.uuid4()),
+                        "x": float(x1),
+                        "y": float(y1),
+                        "width": float(x2 - x1),
+                        "height": float(y2 - y1),
+                        "label": text_prompt,
+                        "confidence": float(score.item())
+                    })
+
+        elif model_type.lower() == "sam2":
+            if not model_path:
+                raise ValueError("Model path required for SAM2")
+            if not text_prompt:
+                raise ValueError("Text prompt required for Grounded SAM2")
+                
+            # Step 1: Get initial bounding boxes using GroundingDINO (Text-to-box)
+            initial_results = self.run_inference(
+                image_path=image_path,
+                model_type="groundingdino",
+                text_prompt=text_prompt,
+                confidence=confidence,
+                tiled=tiled
+            )
+            
+            if not initial_results:
+                return []
+                
+            # Convert boxes to SAM format [x1, y1, x2, y2]
+            input_boxes = []
+            for res in initial_results:
+                x1 = res["x"]
+                y1 = res["y"]
+                x2 = res["x"] + res["width"]
+                y2 = res["y"] + res["height"]
+                input_boxes.append([x1, y1, x2, y2])
+                
+            # Step 2: Pass boxes to SAM2 for refinement
+            model = self.load_sam2(model_path)
+            device_to_use = self.device_str
+            # Actually Ultralytics SAM handles mps, we just pass self.device_str
+            sam_res = model.predict(image_path, bboxes=input_boxes, device=device_to_use, verbose=False)[0]
+            
+            if hasattr(sam_res, 'boxes') and sam_res.boxes is not None and len(sam_res.boxes) > 0:
+                for i, box in enumerate(sam_res.boxes):
+                    coords = box.xyxy[0].tolist()
+                    x1, y1, x2, y2 = coords
+                    orig = initial_results[i] if i < len(initial_results) else {}
+                    
+                    calc_conf = float(box.conf[0].item()) if hasattr(box, 'conf') and box.conf is not None else float(orig.get("confidence", 1.0))
+                    
+                    results.append({
+                        "id": str(uuid.uuid4()),
+                        "x": float(x1),
+                        "y": float(y1),
+                        "width": float(x2 - x1),
+                        "height": float(y2 - y1),
+                        "label": orig.get("label", text_prompt),
+                        "confidence": calc_conf
+                    })
+            else:
+                # Fallback to GroundingDINO results if SAM2 yields nothing (or encounters bad bounds)
+                results = initial_results
+
+        elif model_type.lower() == "sam3":
+            if not model_path:
+                raise ValueError("Model path required for SAM3")
+            if not text_prompt:
+                raise ValueError("Text prompt required for SAM3")
+                
+            predictor = self.load_sam3(model_path, confidence)
+            
+            if tiled and sv is not None:
+                print(f"Running Tiled SAM3 Inference on {image_path}...")
+                
+                def sam3_callback(image_slice: np.ndarray, pred, prompt) -> sv.Detections:
+                    pred.set_image(image_slice)
+                    res_list = pred(text=[prompt])
+                    
+                    xyxy_list = []
+                    conf_list = []
+                    class_id_list = []
+                    
+                    if res_list and len(res_list) > 0:
+                        sam_res = res_list[0]
+                        if hasattr(sam_res, 'boxes') and sam_res.boxes is not None and len(sam_res.boxes) > 0:
+                            for box in sam_res.boxes:
+                                coords = box.xyxy[0].tolist()
+                                conf = float(box.conf[0].item()) if hasattr(box, 'conf') and box.conf is not None else 1.0
+                                xyxy_list.append(coords)
+                                conf_list.append(conf)
+                                class_id_list.append(0)
+                    
+                    if not xyxy_list:
+                        return sv.Detections.empty()
+                        
+                    return sv.Detections(
+                        xyxy=np.array(xyxy_list, dtype=np.float32),
+                        confidence=np.array(conf_list, dtype=np.float32),
+                        class_id=np.array(class_id_list, dtype=np.int32)
+                    )
+
+                callback_bound = partial(sam3_callback, pred=predictor, prompt=text_prompt)
+                slicer = sv.InferenceSlicer(callback=callback_bound, slice_wh=(640, 640), iou_threshold=0.5)
+                image_bgr = cv2.imread(image_path)
+                detections = slicer(image_bgr)
+                
+                if hasattr(detections, 'xyxy'):
+                    for i in range(len(detections.xyxy)):
+                        box = detections.xyxy[i]
+                        c = float(detections.confidence[i]) if detections.confidence is not None else 1.0
+                        results.append({
+                            "id": str(uuid.uuid4()),
+                            "x": float(box[0]),
+                            "y": float(box[1]),
+                            "width": float(box[2] - box[0]),
+                            "height": float(box[3] - box[1]),
+                            "label": text_prompt,
+                            "confidence": c
+                        })
+            else:
+                predictor.set_image(image_path)
+                res_list = predictor(text=[text_prompt])
+                
+                if res_list and len(res_list) > 0:
+                    sam_res = res_list[0]
+                    if hasattr(sam_res, 'boxes') and sam_res.boxes is not None and len(sam_res.boxes) > 0:
+                        for box in sam_res.boxes:
+                            coords = box.xyxy[0].tolist()
+                            c = float(box.conf[0].item()) if hasattr(box, 'conf') and box.conf is not None else 1.0
+                            x1, y1, x2, y2 = coords
+                            results.append({
+                                "id": str(uuid.uuid4()),
+                                "x": float(x1),
+                                "y": float(y1),
+                                "width": float(x2 - x1),
+                                "height": float(y2 - y1),
+                                "label": text_prompt,
+                                "confidence": c
+                            })
+
         elif model_type.lower() == "rfdetr":
              if not model_path:
                 raise ValueError("Model path required for RF-DETR")
@@ -456,32 +723,18 @@ class DetectorWrapper:
                      x1, y1, x2, y2 = box
                      
 
-                     
-                     # Determine label
-                     # Mapping Logic:
-                     # The model dict is {1: 'person', 2: 'animal'}
-                     # The inference likely returns 0-indexed classes (0="person", 1="animal").
-                     # If we use direct lookup: 0->None, 1->"person". This is wrong for "animal".
-                     # We detect if the dict is 1-based and shift if necessary.
-                     
-                     is_1_based = (0 not in class_dict) and (1 in class_dict)
-                     
-                     lookup_id = cid
-                     if is_1_based:
-                         lookup_id = cid + 1
-                         
-                     label = class_dict.get(lookup_id, None)
-                     
-                     if label is None:
-                         # Fallback, try string or raw
-                         label = class_dict.get(cid, None)
-                         
-                     if label is None:
-                         label = f"object_{cid}"
-                         
-                     label_to_use = label
+                     # Define the hardcoded mapping according to the specified order
+                     # Person (0), Animal (1), Vehicle (3)
+                     if cid == 0:
+                         label_to_use = "person"
+                     elif cid == 1:
+                         label_to_use = "animal"
+                     elif cid == 3:
+                         label_to_use = "vehicle"
+                     else:
+                         label_to_use = f"object_{cid}"
 
-                     print(f"DEBUG: Detection {i}: CID={cid} -> LookupID={lookup_id}, Label={label_to_use}")
+                     print(f"DEBUG: Detection {i}: CID={cid} -> Label={label_to_use}")
 
                      results.append({
                         "id": str(uuid.uuid4()),

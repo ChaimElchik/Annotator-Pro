@@ -71,6 +71,9 @@ const els = {
     // Classes Display
     modelClassesDisplay: document.getElementById('model-classes-display'),
     modelClassesList: document.getElementById('model-classes-list'),
+    
+    btnDownloadSam2: document.getElementById('btn-download-sam2'), // New
+
 
     aaConf: document.getElementById('aa-conf'),
     aaConfVal: document.getElementById('conf-val'),
@@ -136,6 +139,27 @@ function setupEventListeners() {
 
     els.aaBtn.addEventListener('click', handleAutoAnnotate);
     els.aaBtnAll.addEventListener('click', handleAutoAnnotateAll);
+    
+    if (els.btnDownloadSam2) {
+        els.btnDownloadSam2.addEventListener('click', async () => {
+            els.btnDownloadSam2.disabled = true;
+            els.btnDownloadSam2.innerText = "Downloading... (Please wait)";
+            try {
+                const res = await fetch('/api/download_sam2', { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.status || "All SAM2 models (including Large) have been downloaded successfully!");
+                } else {
+                    alert("Failed to download SAM2 models.");
+                }
+            } catch (err) {
+                alert("Failed to start download: " + err);
+            } finally {
+                els.btnDownloadSam2.disabled = false;
+                els.btnDownloadSam2.innerText = "Download SAM2s";
+            }
+        });
+    }
 
     // Navigation
     els.prevBtn.addEventListener('click', () => { loadImage(state.currentImageIndex - 1); });
@@ -309,15 +333,32 @@ function handleModelTypeChange() {
     els.btnUploadModel.innerText = "Upload Weights (.pt)";
     els.btnUploadModel.disabled = false;
 
-    if (type === 'countgd') {
+    if (type === 'countgd' || type === 'groundingdino' || type === 'sam2' || type === 'sam3') {
         els.sectionCountGD.classList.remove('hidden');
-        els.sectionCustomModel.classList.add('hidden');
     } else {
         els.sectionCountGD.classList.add('hidden');
+    }
+
+    if (type === 'countgd' || type === 'groundingdino') {
+        els.sectionCustomModel.classList.add('hidden');
+        if(els.btnDownloadSam2) els.btnDownloadSam2.classList.add('hidden');
+    } else {
         els.sectionCustomModel.classList.remove('hidden');
 
         // Reset the selected model file so users must explicitly choose one for the new type
+        // Provide hint for SAM3 weights if selected
+        if (type === 'sam3') {
+             els.aaModelFile.innerHTML = '<option value="" disabled selected>Upload/Select sam3.pt...</option>' + els.aaModelFile.innerHTML.substring(els.aaModelFile.innerHTML.indexOf('</option>') + 9);
+        } else {
+             els.aaModelFile.innerHTML = '<option value="" disabled selected>Select a model file...</option>' + els.aaModelFile.innerHTML.substring(els.aaModelFile.innerHTML.indexOf('</option>') + 9);
+        }
         els.aaModelFile.value = "";
+        
+        if (type === 'sam2' && els.btnDownloadSam2) {
+            els.btnDownloadSam2.classList.remove('hidden');
+        } else if (els.btnDownloadSam2) {
+            els.btnDownloadSam2.classList.add('hidden');
+        }
     }
 }
 
@@ -549,19 +590,23 @@ async function handleAutoAnnotate() {
     let prompt = null;
     let filename = null;
 
-    if (type === 'countgd') {
+    if (type === 'countgd' || type === 'groundingdino' || type === 'sam2' || type === 'sam3') {
         prompt = els.aaPrompt.value.trim();
         if (!prompt) {
             alert("Please enter a text prompt");
             return;
         }
-    } else {
+    }
+    
+    if (type !== 'countgd' && type !== 'groundingdino') {
         filename = els.aaModelFile.value;
         if (!filename) {
-            alert("Please select a model file");
+            alert("Please select a model file (e.g. sam3.pt or YOLO model)");
             return;
         }
-        prompt = "detected_object";
+        if (type !== 'sam2' && type !== 'sam3') {
+            prompt = "detected_object";
+        }
     }
 
     els.aaBtn.disabled = true;

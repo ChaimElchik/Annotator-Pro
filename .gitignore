@@ -40,3 +40,6 @@ data/images/*
 !data/images/.gitkeep
 data/models/*
 !data/models/.gitkeep
+*.pth
+*.pt
+models/
