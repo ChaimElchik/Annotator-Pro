@@ -1,6 +1,6 @@
 # Annotator Pro
 
-A powerful, web-based tool for annotating images and video frames for computer vision tasks. It supports manual annotation and AI-powered auto-annotation using state-of-the-art models like CountGD, YOLO, and RF-DETR.
+A powerful, offline tool for annotating images and video frames for computer vision tasks. It supports manual annotation and AI-powered auto-annotation using state-of-the-art models like CountGD, YOLO, and RF-DETR.
 
 ## Prerequisites: Install Python
 
