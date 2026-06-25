@@ -1,6 +1,9 @@
 @echo off
 echo Starting Video Annotator Pro...
 
+echo Checking for updates...
+git pull || echo Warning: Could not pull latest updates from GitHub. Proceeding anyway.
+
 IF NOT EXIST ".venv\Scripts\activate.bat" (
     echo Virtual environment not found!
     echo Please double-click "setup_windows.bat" to run the setup first.

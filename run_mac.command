@@ -3,6 +3,9 @@ cd "$(dirname "$0")"
 
 echo "Starting Video Annotator Pro..."
 
+echo "Checking for updates..."
+git pull || echo "Warning: Could not pull latest updates from GitHub. Proceeding anyway."
+
 if [ ! -f ".venv/bin/activate" ]; then
     echo "Virtual environment not found!"
     echo "Please double-click 'setup_mac.command' to run the setup first."

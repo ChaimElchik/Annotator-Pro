@@ -14,7 +14,7 @@ except ImportError:
     YOLO = None
 
 try:
-    from rfdetr import RFDETRMedium, RFDETRNano, RFDETRBase, RFDETRLarge
+    from rfdetr.variants import RFDETRMedium
 except ImportError:
     RFDETRMedium = None
 
@@ -161,35 +161,65 @@ class DetectorWrapper:
         # device = "cpu" if self.device_str == "mps" else self.device_str
         
         # --- Dynamic Parameter Extraction ---
-        try:
-            # We use weights_only=False because the RF-DETR checkpoints bundle a custom parser Namespace.
-            # However, we only need to read the dictionary headers, not fully instantiate the model yet.
-            ckpt = torch.load(weights_path, map_location='cpu', weights_only=False)
-            args = vars(ckpt.get('args', {})) if isinstance(ckpt, dict) else {}
-        except Exception as e:
-            print(f"Warning: Could not dynamically parse RF-DETR PyTorch arguments: {e}")
-            args = {}
+        def get_rf_metadata(checkpoint_path, default=1280):
+            res = default
+            class_names_dict = {}
+            try:
+                ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+                if 'args' in ckpt:
+                    args_obj = ckpt['args']
+                    if hasattr(args_obj, 'resolution'):
+                        res = args_obj.resolution
+                    elif isinstance(args_obj, dict) and 'resolution' in args_obj:
+                        res = args_obj['resolution']
+                        
+                    raw_classes = None
+                    if hasattr(args_obj, 'class_names'):
+                        raw_classes = args_obj.class_names
+                    elif isinstance(args_obj, dict) and 'class_names' in args_obj:
+                        raw_classes = args_obj['class_names']
+                        
+                    if isinstance(raw_classes, list):
+                        class_names_dict = {i: name for i, name in enumerate(raw_classes)}
+                    elif isinstance(raw_classes, dict):
+                        class_names_dict = raw_classes
+                        
+                # Check for a custom JSON override next to the weights file
+                import os, json
+                custom_json_path = checkpoint_path.replace('.pth', '.json').replace('.pt', '.json')
+                if os.path.exists(custom_json_path):
+                    with open(custom_json_path, 'r') as f:
+                        custom_classes = json.load(f)
+                    
+                    if isinstance(custom_classes, list):
+                        # Support for a flat list or list of dicts (like COCO categories)
+                        if len(custom_classes) > 0 and isinstance(custom_classes[0], dict) and 'name' in custom_classes[0]:
+                            # Try to extract from COCO categories format and map to contiguous indices
+                            names = [c['name'] for c in custom_classes]
+                            class_names_dict = {i: name for i, name in enumerate(names)}
+                        else:
+                            class_names_dict = {i: name for i, name in enumerate(custom_classes)}
+                    elif isinstance(custom_classes, dict):
+                        # Extract string values sorted by integer keys if they are numbers
+                        try:
+                            sorted_names = [custom_classes[k] for k in sorted(custom_classes.keys(), key=int)]
+                            class_names_dict = {i: name for i, name in enumerate(sorted_names)}
+                        except ValueError:
+                            class_names_dict = {i: name for i, name in enumerate(custom_classes.values())}
+
+            except Exception as e:
+                print(f"[!] Could not read metadata from checkpoint: {e}")
+            return res, class_names_dict
             
-        detected_res = args.get('resolution', 640)
-        detected_base = args.get('pretrain_weights', 'medium').lower() if args.get('pretrain_weights') else 'medium'
+        detected_res, detected_classes = get_rf_metadata(weights_path, default=1280)
         
-        print(f"RF-DETR Config Detected -> Resolution: {detected_res}, Scale: {detected_base}")
+        print(f"RF-DETR Config Detected -> Resolution: {detected_res}, Classes: {detected_classes}")
 
         # --- Dynamic Instantiation ---
         try:
-            if "nano" in detected_base:
-                modelclass = RFDETRNano
-            elif "base" in detected_base:
-                modelclass = RFDETRBase
-            elif "large" in detected_base:
-                modelclass = RFDETRLarge
-            else:
-                modelclass = RFDETRMedium  # Default backstop
-                
-            model = modelclass(
+            model = RFDETRMedium(
                 pretrain_weights=weights_path,
-                resolution=detected_res,
-                device=self.device_str
+                resolution=detected_res
             )
         except TypeError as te:
             if "'DetectionModel' object is not subscriptable" in str(te):
@@ -204,6 +234,9 @@ class DetectorWrapper:
             model.optimize_for_inference()
         except Exception as opt_e:
             print(f"Warning: Failed to optimize RF-DETR for inference: {opt_e}. Continuing with standard model.")
+            
+        # Use a custom attribute because class_names is a read-only property
+        model.custom_class_names = detected_classes
         
         self.model_cache[weights_path] = model
         return model
@@ -225,10 +258,14 @@ class DetectorWrapper:
                 
             elif model_type.lower() == "rfdetr":
                 model = self.load_rfdetr(model_path)
-                # RFDETR class_names property returns a dict {id: name}
                 classes = []
-                if hasattr(model, 'class_names'):
-                    for cls_id, cls_name in model.class_names.items():
+                # Check for custom_class_names first
+                class_dict = getattr(model, 'custom_class_names', None)
+                if not class_dict and hasattr(model, 'class_names') and model.class_names:
+                    class_dict = model.class_names
+                    
+                if class_dict:
+                    for cls_id, cls_name in class_dict.items():
                         classes.append({"id": cls_id, "name": cls_name})
                 else:
                     classes.append({"id": 0, "name": "object"})
@@ -687,12 +724,17 @@ class DetectorWrapper:
                  print(f"Running Tiled RF-DETR Inference on {image_path}...")
                  def rf_detr_callback(image_slice: np.ndarray, model) -> sv.Detections:
                     slice_pil = Image.fromarray(cv2.cvtColor(image_slice, cv2.COLOR_BGR2RGB))
-                    return model.predict(slice_pil, threshold=confidence)
+                    raw_detections = model.predict(slice_pil, threshold=confidence)
+                    return sv.Detections(
+                        xyxy=raw_detections.xyxy,
+                        confidence=raw_detections.confidence,
+                        class_id=raw_detections.class_id
+                    )
 
                  callback_with_model = partial(rf_detr_callback, model=model)
                  rf_slicer = sv.InferenceSlicer(
                     callback=callback_with_model,
-                    slice_wh=(640, 640),
+                    slice_wh=(1280, 1280),
                     iou_threshold=0.5
                  )
                  # Slicer expects numpy BGR
@@ -703,8 +745,8 @@ class DetectorWrapper:
                  detections = model.predict(img, threshold=confidence)
              
              # Map class IDs to names
-             class_dict = {}
-             if hasattr(model, 'class_names'):
+             class_dict = getattr(model, 'custom_class_names', None)
+             if not class_dict and hasattr(model, 'class_names') and model.class_names:
                  class_dict = model.class_names # {id: name}
 
              if hasattr(detections, 'xyxy'):
@@ -722,15 +764,8 @@ class DetectorWrapper:
                      box = xyxy[i]
                      x1, y1, x2, y2 = box
                      
-
-                     # Define the hardcoded mapping according to the specified order
-                     # Person (0), Animal (1), Vehicle (3)
-                     if cid == 0:
-                         label_to_use = "person"
-                     elif cid == 1:
-                         label_to_use = "animal"
-                     elif cid == 3:
-                         label_to_use = "vehicle"
+                     if class_dict and cid in class_dict:
+                         label_to_use = class_dict[cid]
                      else:
                          label_to_use = f"object_{cid}"
 

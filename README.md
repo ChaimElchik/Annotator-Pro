@@ -104,6 +104,8 @@ Instead of manually drawing hundreds of boxes, use state-of-the-art AI models to
     *   **CountGD (Text Prompt)**: An open-set object detector. You do not need to train a model. Simply type the name of the object you want (e.g., "car", "person", "bird") in the **Prompt** box, and the AI will attempt to find it. Make sure you downloaded the weights during Setup!
     *   **YOLO (v8/v11/26)**: If you have your own trained model weights, upload your `.pt` file here. The system will extract the classes your model was trained on automatically.
     *   **RF-DETR**: Similar to YOLO, upload custom `.pt` weights for transformer-based detection.
+        *   *Note: rfdetr must be installed in your environment or accessible in the python path.*
+        *   *If you get a ModuleNotFoundError: No module named 'rfdetr.variants' error than download rfdetr from source patch using: `pip install git+https://github.com/roboflow/rf-detr.git`*
 *   **Confidence Slider**: Adjust the slider to filter out weak detections. Higher values (e.g. `0.65`) mean the AI has to be very sure, while lower values (e.g. `0.20`) will catch more objects but potentially produce more false positives.
 *   **Enable Tiled Inference**: When hunting for very small objects in large high-resolution images, check this box. The AI will slice the image into smaller 640x640 overlapping tiles, run inference on each slice, and intelligently merge the boxes. Supported across all models!
 *   **Run on All Images**: Once you find the perfect confidence and prompt for your current image, you can click this to run the AI across your entire loaded dataset in the background.
