@@ -42,4 +42,3 @@ data/models/*
 !data/models/.gitkeep
 *.pth
 *.pt
-models/
