@@ -13,9 +13,9 @@ IF NOT EXIST ".venv\Scripts\activate.bat" (
 
 call .venv\Scripts\activate.bat
 
-:: Start the server in the background and capture output
+:: Start the server in a new window that stays open if it crashes
 echo Server is starting up...
-start "Video Annotator Pro Server" python main.py
+start "Video Annotator Pro Server" cmd /k "python main.py"
 
 echo Opening browser in 2 seconds...
 timeout /t 2 /nobreak >nul
