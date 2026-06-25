@@ -18,7 +18,7 @@ yapf
 timm
 # New Features
 ultralytics
-rfdetr
+git+https://github.com/roboflow/rf-detr.git
 supervision
 pillow
 numpy
