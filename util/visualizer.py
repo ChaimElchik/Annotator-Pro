@@ -17,7 +17,10 @@ import datetime
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
-from pycocotools import mask as maskUtils
+try:
+    from pycocotools import mask as maskUtils
+except ImportError:
+    maskUtils = None
 from matplotlib import transforms
 
 def renorm(img: torch.FloatTensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) \

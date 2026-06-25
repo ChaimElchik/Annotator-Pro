@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import torch.utils.data
 import torchvision
-from .coco import build as build_coco
+import torchvision
 
 
 def get_coco_api_from_dataset(dataset):
@@ -16,6 +16,7 @@ def get_coco_api_from_dataset(dataset):
 
 def build_dataset(image_set, args, datasetinfo):
     if datasetinfo["dataset_mode"] == 'coco':
+        from .coco import build as build_coco
         return build_coco(image_set, args, datasetinfo)
     if datasetinfo["dataset_mode"] == 'odvg':
         from .odvg import build_odvg

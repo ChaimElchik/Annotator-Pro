@@ -23,5 +23,3 @@ supervision
 pillow
 numpy
 sahi
-pycocotools; sys_platform != "win32"
-pycocotools-windows; sys_platform == "win32"

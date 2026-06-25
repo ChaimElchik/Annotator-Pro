@@ -16,7 +16,10 @@ import torch
 from matplotlib import transforms
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
-from pycocotools import mask as maskUtils
+try:
+    from pycocotools import mask as maskUtils
+except ImportError:
+    maskUtils = None
 
 
 def renorm(
